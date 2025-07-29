@@ -4,17 +4,36 @@ import plotly.express as px
 
 st.set_page_config(page_title="Income Tax Calculator", layout="wide")
 
-# ---- THEME STATE ----
+# -------------------- THEME STATE --------------------
 if "theme" not in st.session_state:
     st.session_state.theme = "light"
 
-# ---- THEME TOGGLE (REAL) ----
+# Theme colors
+def get_theme_colors():
+    if st.session_state.theme == "light":
+        return {
+            "bg": "#ffffff",
+            "text": "#000000",
+            "bar_colors": ["#ff6b6b", "#1dd1a1"]
+        }
+    else:
+        return {
+            "bg": "#0e1117",
+            "text": "#ffffff",
+            "bar_colors": ["#feca57", "#48dbfb"]
+        }
+
+colors = get_theme_colors()
+
+# -------------------- THEME TOGGLE --------------------
 colA, colB = st.columns([10, 1])
 with colB:
-    toggle = st.toggle("🌙", value=(st.session_state.theme=="dark"), label_visibility="collapsed")
+    st.write("🌞" if st.session_state.theme == "light" else "🌙")
+    toggle = st.toggle("Theme", value=(st.session_state.theme == "dark"), label_visibility="collapsed")
     st.session_state.theme = "dark" if toggle else "light"
+    colors = get_theme_colors()
 
-# ---- TAX SLABS ----
+# -------------------- TAX SLABS --------------------
 old_slabs = [
     (0, 250000, 0.0),
     (250000, 500000, 0.05),
@@ -31,7 +50,7 @@ new_slabs = [
     (1500000, float("inf"), 0.3),
 ]
 
-# ---- TAX CALCULATION FUNCTION ----
+# -------------------- TAX FUNCTIONS --------------------
 def slab_tax(income, slabs):
     tax = 0
     breakdown = []
@@ -59,7 +78,7 @@ def total_tax(salary, other_income, deductions, special_income, slabs):
     cess = total * 0.04
     return total + cess, breakdown, slab_tax_amt, special_tax, cess
 
-# ---- INPUT PANEL ----
+# -------------------- INPUT PANEL --------------------
 with st.sidebar:
     st.markdown("### 📋 Enter Your Details")
     salary = st.number_input("Salary Income (₹)", 0, step=5000)
@@ -81,7 +100,7 @@ deductions_new = 50000
 
 special_income = {"STCG": STCG, "LTCG": LTCG, "Lottery": Lottery, "Crypto": Crypto}
 
-# ---- CALCULATE TAXES ----
+# -------------------- CALCULATE TAXES --------------------
 tax_old, breakdown_old, slab_old, special_old, cess_old = total_tax(
     salary, other_income, deductions_old, special_income, old_slabs
 )
@@ -92,13 +111,14 @@ tax_new, breakdown_new, slab_new, special_new, cess_new = total_tax(
 savings = tax_old - tax_new
 better = "✅ New Regime is Better" if savings > 0 else "✅ Old Regime is Better"
 
-# ---- COMPARISON TABLE ----
+# -------------------- COMPARISON TABLE --------------------
 df = pd.DataFrame({
     "Particulars": ["Gross Income", "Total Deductions", "Taxable Income", "Tax from Slab", "Tax from Special", "Cess (4%)", "Total Tax Payable"],
     "Old Regime": [f"₹{salary+other_income:,}", f"₹{deductions_old:,}", f"₹{salary+other_income-deductions_old:,}", f"₹{slab_old:,}", f"₹{special_old:,}", f"₹{cess_old:,.0f}", f"₹{tax_old:,.0f}"],
     "New Regime": [f"₹{salary+other_income:,}", f"₹{deductions_new:,}", f"₹{salary+other_income-deductions_new:,}", f"₹{slab_new:,}", f"₹{special_new:,}", f"₹{cess_new:,.0f}", f"₹{tax_new:,.0f}"]
 })
 
+# -------------------- LAYOUT --------------------
 col1, col2 = st.columns([2, 3])
 with col1:
     st.subheader("📊 Tax Comparison Table")
@@ -111,10 +131,11 @@ with col2:
         y=[tax_old, tax_new],
         labels={"x": "Regime", "y": "Total Tax (₹)"},
         color=["Old Regime", "New Regime"],
-        color_discrete_map={"Old Regime": "#ff6b6b", "New Regime": "#1dd1a1"},
+        color_discrete_map={"Old Regime": colors["bar_colors"][0], "New Regime": colors["bar_colors"][1]},
         text=[f"₹{tax_old:,.0f}", f"₹{tax_new:,.0f}"]
     )
     fig.update_traces(textposition="outside")
+    fig.update_layout(plot_bgcolor=colors["bg"], paper_bgcolor=colors["bg"], font_color=colors["text"])
     st.plotly_chart(fig, use_container_width=True)
 
 col3, col4 = st.columns(2)
