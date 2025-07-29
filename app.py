@@ -2,155 +2,163 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 
-st.set_page_config(page_title="Income Tax Calculator", page_icon="💰", layout="wide")
+st.set_page_config(page_title="Income Tax Calculator", layout="wide")
 
-# =========================
-# 🌗 Theme Toggle (Working)
-# =========================
+# ---- THEME TOGGLE ----
 if "theme" not in st.session_state:
     st.session_state.theme = "light"
 
 def toggle_theme():
     st.session_state.theme = "dark" if st.session_state.theme == "light" else "light"
 
-col1, col2 = st.columns([10, 1])
-with col2:
-    if st.button("🌞" if st.session_state.theme == "light" else "🌙"):
-        toggle_theme()
-
-# Apply custom theme CSS dynamically
-bg_color = "#FFFFFF" if st.session_state.theme == "light" else "#0E1117"
-text_color = "#000000" if st.session_state.theme == "light" else "#FFFFFF"
-
+theme_icon = "🌙" if st.session_state.theme == "light" else "☀️"
 st.markdown(
     f"""
     <style>
-        .stApp {{
-            background-color: {bg_color};
-            color: {text_color};
+        .theme-toggle {{
+            position: fixed;
+            top: 15px;
+            right: 25px;
+            font-size: 28px;
+            cursor: pointer;
         }}
     </style>
+    <div class="theme-toggle" onclick="window.location.reload()">{theme_icon}</div>
     """,
     unsafe_allow_html=True
 )
 
-# Plotly theme
-plotly_theme = "plotly_white" if st.session_state.theme == "light" else "plotly_dark"
+# ---- TAX SLABS ----
+old_slabs = [
+    (0, 250000, 0.0),
+    (250000, 500000, 0.05),
+    (500000, 1000000, 0.2),
+    (1000000, float("inf"), 0.3),
+]
 
-# =========================
-# Inputs (Sidebar for Desktop, Top for Mobile)
-# =========================
-params = st.query_params
-is_mobile = params.get("isMobile", "false") == "true"
+new_slabs = [
+    (0, 300000, 0.0),
+    (300000, 600000, 0.05),
+    (600000, 900000, 0.1),
+    (900000, 1200000, 0.15),
+    (1200000, 1500000, 0.2),
+    (1500000, float("inf"), 0.3),
+]
 
-if is_mobile:
-    st.subheader("🔢 Enter Your Details")
-    salary_income = st.number_input("Salary Income (₹)", 0, step=10000)
-    other_income = st.number_input("Other Income (₹)", 0, step=5000)
-    stcg = st.number_input("STCG (15%)", 0, step=1000)
-    ltcg = st.number_input("LTCG (>₹1L @10%)", 0, step=1000)
-    lottery = st.number_input("Lottery (30%+Cess)", 0, step=1000)
-    crypto = st.number_input("Crypto Income (30%+Cess)", 0, step=1000)
-    st.subheader("Deductions (Old Regime)")
-    ded_80c = st.number_input("80C", 0, 150000, step=5000)
-    ded_80d = st.number_input("80D", 0, step=5000)
-    ded_hra = st.number_input("HRA Exemption", 0, step=5000)
-    ded_80tta = st.number_input("80TTA/80TTB", 0, step=5000)
-else:
-    with st.sidebar:
-        st.header("🔢 Enter Your Details")
-        salary_income = st.number_input("Salary Income (₹)", 0, step=10000)
-        other_income = st.number_input("Other Income (₹)", 0, step=5000)
-
-        st.subheader("Special Income")
-        stcg = st.number_input("STCG (15%)", 0, step=1000)
-        ltcg = st.number_input("LTCG (>₹1L @10%)", 0, step=1000)
-        lottery = st.number_input("Lottery (30%+Cess)", 0, step=1000)
-        crypto = st.number_input("Crypto Income (30%+Cess)", 0, step=1000)
-
-        st.subheader("Deductions (Old Regime)")
-        ded_80c = st.number_input("80C", 0, 150000, step=5000)
-        ded_80d = st.number_input("80D", 0, step=5000)
-        ded_hra = st.number_input("HRA Exemption", 0, step=5000)
-        ded_80tta = st.number_input("80TTA/80TTB", 0, step=5000)
-
-# =========================
-# Tax Calculation
-# =========================
-def calculate_slab_tax(taxable, regime):
+# ---- TAX CALCULATION ----
+def slab_tax(income, slabs):
     tax = 0
-    if regime == "new":
-        slabs = [(0,300000,0.0),(300000,600000,0.05),(600000,900000,0.10),
-                 (900000,1200000,0.15),(1200000,1500000,0.20),(1500000,float('inf'),0.30)]
-    else:
-        slabs = [(0,250000,0.0),(250000,500000,0.05),(500000,1000000,0.20),(1000000,float('inf'),0.30)]
+    breakdown = []
     for lower, upper, rate in slabs:
-        if taxable > lower:
-            portion = min(taxable, upper) - lower
-            tax += portion * rate
-    return tax
+        if income > lower:
+            taxable_amt = min(income, upper) - lower
+            tax_amt = taxable_amt * rate
+            breakdown.append((f"₹{lower:,} – ₹{upper if upper!=float('inf') else '∞'}", f"{rate*100:.0f}%", taxable_amt, tax_amt))
+            tax += tax_amt
+    return tax, breakdown
 
-# Income & deductions
-gross_income = salary_income + other_income + stcg + ltcg + lottery + crypto
-standard_deduction = 50000
-old_deductions = min(ded_80c, 150000) + ded_80d + ded_hra + ded_80tta + standard_deduction
+def total_tax(salary, other_income, deductions, special_income, slabs):
+    gross_income = salary + other_income
+    taxable_income = max(0, gross_income - deductions)
+    slab_tax_amt, breakdown = slab_tax(taxable_income, slabs)
 
-old_taxable = salary_income + other_income - old_deductions
-new_taxable = salary_income + other_income - standard_deduction
+    # Special Income Tax
+    special_tax = (
+        special_income["STCG"] * 0.15 +
+        max(0, special_income["LTCG"] - 100000) * 0.10 +
+        special_income["Lottery"] * 0.30 +
+        special_income["Crypto"] * 0.30
+    )
 
-old_tax_slab = calculate_slab_tax(max(old_taxable,0), "old")
-new_tax_slab = calculate_slab_tax(max(new_taxable,0), "new")
+    total = slab_tax_amt + special_tax
+    cess = total * 0.04
+    total_with_cess = total + cess
+    return total_with_cess, breakdown, slab_tax_amt, special_tax, cess
 
-special_tax = stcg*0.15 + max((ltcg-100000),0)*0.10 + (lottery+crypto)*0.30
+# ---- INPUT PANEL ----
+with st.sidebar:
+    st.markdown("### 📋 Enter Your Details")
+    salary = st.number_input("Salary Income (₹)", 0, step=5000)
+    other_income = st.number_input("Other Income (₹)", 0, step=5000)
 
-old_total = (old_tax_slab + special_tax) * 1.04
-new_total = (new_tax_slab + special_tax) * 1.04
+    st.markdown("### 💰 Special Income")
+    STCG = st.number_input("STCG (15%)", 0, step=5000)
+    LTCG = st.number_input("LTCG (>₹1L @10%)", 0, step=5000)
+    Lottery = st.number_input("Lottery (30%+Cess)", 0, step=5000)
+    Crypto = st.number_input("Crypto Income (30%+Cess)", 0, step=5000)
 
-# =========================
-# Comparison Table
-# =========================
+    st.markdown("### 📉 Deductions (Old Regime)")
+    d80C = st.number_input("80C", 0, step=5000)
+    d80D = st.number_input("80D", 0, step=5000)
+    hra = st.number_input("HRA Exemption", 0, step=5000)
+
+deductions_old = 50000 + d80C + d80D + hra
+deductions_new = 50000  # Only standard deduction
+
+special_income = {"STCG": STCG, "LTCG": LTCG, "Lottery": Lottery, "Crypto": Crypto}
+
+# ---- TAX CALCULATIONS ----
+tax_old, breakdown_old, slab_old, special_old, cess_old = total_tax(
+    salary, other_income, deductions_old, special_income, old_slabs
+)
+tax_new, breakdown_new, slab_new, special_new, cess_new = total_tax(
+    salary, other_income, deductions_new, special_income, new_slabs
+)
+
+savings = tax_old - tax_new
+better = "New Regime is Better ✅" if savings > 0 else "Old Regime is Better ✅"
+
+# ---- COMPARISON TABLE ----
 data = {
-    "Particulars": ["Gross Income","Total Deductions","Taxable Income","Tax from Slab","Tax from Special Income","Cess (4%)","Total Tax Payable"],
-    "Old Regime": [gross_income, old_deductions, old_taxable, old_tax_slab, special_tax, (old_tax_slab+special_tax)*0.04, old_total],
-    "New Regime": [gross_income, standard_deduction, new_taxable, new_tax_slab, special_tax, (new_tax_slab+special_tax)*0.04, new_total]
+    "Particulars": ["Gross Income", "Total Deductions", "Taxable Income", "Tax from Slab", "Tax from Special", "Cess (4%)", "Total Tax Payable"],
+    "Old Regime": [f"₹{salary+other_income:,}", f"₹{deductions_old:,}", f"₹{salary+other_income-deductions_old:,}", f"₹{slab_old:,}", f"₹{special_old:,}", f"₹{cess_old:,.0f}", f"₹{tax_old:,.0f}"],
+    "New Regime": [f"₹{salary+other_income:,}", f"₹{deductions_new:,}", f"₹{salary+other_income-deductions_new:,}", f"₹{slab_new:,}", f"₹{special_new:,}", f"₹{cess_new:,.0f}", f"₹{tax_new:,.0f}"]
 }
-
 df = pd.DataFrame(data)
-st.subheader("📊 Tax Comparison Table")
-st.table(df.style.format({"Old Regime":"₹{:,.0f}","New Regime":"₹{:,.0f}"}))
 
-# =========================
-# Savings Highlight
-# =========================
-savings = old_total - new_total
-if savings > 0:
-    best_text = f"✅ New Regime is Better – You Save ₹{abs(savings):,.0f}"
-else:
-    best_text = f"✅ Old Regime is Better – You Save ₹{abs(savings):,.0f}"
-
-st.success(best_text)
-
-# =========================
-# Charts
-# =========================
-col1, col2 = st.columns(2)
-
+# ---- LAYOUT ----
+col1, col2 = st.columns([2, 3])
 with col1:
-    fig = px.bar(x=["Old Regime","New Regime"], y=[old_total,new_total],
-                 text=[f"₹{old_total:,.0f}",f"₹{new_total:,.0f}"],
-                 color=["Old Regime","New Regime"],
-                 title="Total Tax Payable",
-                 color_discrete_map={"Old Regime":"#EF553B","New Regime":"#00CC96"},
-                 template=plotly_theme)
-    st.plotly_chart(fig, use_container_width=True)
+    st.subheader("📊 Tax Comparison Table")
+    st.dataframe(df, use_container_width=True)
+    st.success(f"💡 {better} – You Save ₹{abs(savings):,.0f}")
 
 with col2:
-    pie_old = pd.DataFrame({"Type":["Slab Tax","Special Tax","Cess"],
-                            "Value":[old_tax_slab, special_tax, (old_tax_slab+special_tax)*0.04]})
-    pie_new = pd.DataFrame({"Type":["Slab Tax","Special Tax","Cess"],
-                            "Value":[new_tax_slab, special_tax, (new_tax_slab+special_tax)*0.04]})
+    fig = px.bar(
+        x=["Old Regime", "New Regime"],
+        y=[tax_old, tax_new],
+        labels={"x": "Regime", "y": "Total Tax (₹)"},
+        color=["Old Regime", "New Regime"],
+        color_discrete_map={"Old Regime": "#ff6b6b", "New Regime": "#1dd1a1"},
+        text=[f"₹{tax_old:,.0f}", f"₹{tax_new:,.0f}"]
+    )
+    fig.update_traces(textposition="outside")
+    st.plotly_chart(fig, use_container_width=True)
 
-    st.plotly_chart(px.pie(pie_old, names="Type", values="Value", title="Old Regime Tax Distribution", template=plotly_theme), use_container_width=True)
-    st.plotly_chart(px.pie(pie_new, names="Type", values="Value", title="New Regime Tax Distribution", template=plotly_theme), use_container_width=True)
+# ---- PIE CHARTS ----
+col3, col4 = st.columns(2)
+with col3:
+    fig_old = px.pie(
+        values=[slab_old, special_old, cess_old],
+        names=["Tax Slab", "Special Income", "Cess"],
+        title="Old Regime Tax Distribution"
+    )
+    st.plotly_chart(fig_old, use_container_width=True)
 
-st.caption("Built with ❤️ using Streamlit")
+with col4:
+    fig_new = px.pie(
+        values=[slab_new, special_new, cess_new],
+        names=["Tax Slab", "Special Income", "Cess"],
+        title="New Regime Tax Distribution"
+    )
+    st.plotly_chart(fig_new, use_container_width=True)
+
+# ---- SLAB TABLES ----
+col5, col6 = st.columns(2)
+with col5:
+    st.subheader("📄 Old Regime Slab Calculation")
+    st.dataframe(pd.DataFrame(breakdown_old, columns=["Slab", "Rate", "Taxable Income", "Tax"]), use_container_width=True)
+
+with col6:
+    st.subheader("📄 New Regime Slab Calculation")
+    st.dataframe(pd.DataFrame(breakdown_new, columns=["Slab", "Rate", "Taxable Income", "Tax"]), use_container_width=True)
