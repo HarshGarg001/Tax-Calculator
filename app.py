@@ -40,7 +40,8 @@ with col2:
 # =========================
 # 📱 Responsive Layout
 # =========================
-is_mobile = st.experimental_get_query_params().get("isMobile", ["false"])[0] == "true"
+params = st.query_params
+is_mobile = params.get("isMobile", "false") == "true"
 
 if is_mobile:
     st.title("💰 Income Tax Calculator")
