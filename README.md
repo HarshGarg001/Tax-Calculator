@@ -34,7 +34,7 @@ It includes:
 
 ### 1️⃣ Clone the repository
 ```bash
-git clone https://github.com/<your-username>/income-tax-calculator.git
+git clone https://github.com/HarshGarg001/Tax-Calculator.git
 cd income-tax-calculator
 ```
 
@@ -59,16 +59,7 @@ The Excel sheet includes:
 ---
 
 ## 🌐 Live App (Optional)
-👉 [Click Here to Try on Streamlit](https://your-streamlit-link.streamlit.app)  
-
----
-
-## 📸 Screenshots
-### 🔹 App UI (Dark & Light Mode)
-*(Add screenshots here)*
-
-### 🔹 Excel Comparison Sheet
-*(Add screenshots here)*
+👉 [Click Here to Try on Streamlit](https://calculateyourtax.streamlit.app)  
 
 ---
 
